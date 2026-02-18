@@ -1,0 +1,34 @@
+# Tauri
+src-tauri/target
+src-tauri/gen
+src-tauri/bin
+
+# Build output
+dist
+dist-isolation
+
+# Node
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+*.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

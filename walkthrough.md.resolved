@@ -1,0 +1,85 @@
+# Cluely-RS — Build Walkthrough
+
+## What Was Built
+
+A full-featured Cluely clone as a **Tauri v2** desktop app (Rust + React/TypeScript) with:
+
+| Feature | Implementation | Status |
+|---|---|---|
+| **Screen Capture** | `xcap` — captures primary monitor, resizes + base64 encodes | ✅ |
+| **Audio Capture** | `cpal` — mic input with start/stop, WAV encoding | ✅ |
+| **OpenAI Integration** | GPT-4o with vision (screen captures as image input) | ✅ |
+| **Ollama Integration** | Local LLM via HTTP API (llama3, mistral, etc.) | ✅ |
+| **Invisible Overlay** | Transparent, borderless, always-on-top window | ✅ |
+| **Session Management** | Create/end sessions, track transcript, generate summaries | ✅ |
+| **Prompt Templates** | SQLite storage, CRUD, pre-seeded defaults (Sales, Interview, etc.) | ✅ |
+| **Settings Persistence** | JSON config file saved in app data directory | ✅ |
+| **Speech-to-Text** | Not yet — whisper-rs planned for Phase 2 | 🔜 |
+
+---
+
+## Project Structure
+
+```
+rustHello/
+├── src-tauri/src/         # Rust backend
+│   ├── lib.rs             # App setup, state management, command handlers
+│   ├── config.rs          # LLM provider settings + persistence
+│   ├── capture/
+│   │   ├── screen.rs      # xcap screen capture → base64 PNG
+│   │   └── audio.rs       # cpal mic recording → audio buffer
+│   ├── ai/
+│   │   ├── llm.rs         # LLM abstraction + context-aware prompting
+│   │   ├── openai.rs      # OpenAI API + vision
+│   │   └── ollama.rs      # Ollama local LLM
+│   └── session/
+│       ├── manager.rs     # Session lifecycle + transcript
+│       └── storage.rs     # SQLite (sessions, prompts, settings)
+├── src/                   # React frontend
+│   ├── App.tsx            # Main app with tabs + controls
+│   ├── components/
+│   │   ├── Overlay.tsx    # Chat-style AI assistance
+│   │   ├── Transcript.tsx # Live transcript display
+│   │   └── Settings.tsx   # Config + prompt template management
+│   ├── index.css          # Design system (dark glassmorphism)
+│   └── App.css            # Component styles
+└── src-tauri/tauri.conf.json  # Transparent, always-on-top, borderless
+```
+
+---
+
+## How to Run
+
+```bash
+cd /Users/venkatreddy/Desktop/rustHello
+
+# Install dependencies (already done)
+npm install
+
+# Launch dev server
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"
+npm run tauri dev
+```
+
+## Build Verification
+
+- ✅ `npm install` — 75 packages, 0 vulnerabilities
+- ✅ `cargo check` — compiles with 1 warning (harmless)
+- ✅ `npm run tauri dev` — Vite server + Rust binary launch successfully
+- ⚠️ macOS will prompt for **Screen Recording** and **Microphone** permissions on first use
+
+## Configuration
+
+On first launch, go to **Settings tab** to:
+1. Select **OpenAI** or **Ollama** provider
+2. Enter your **API key** (for OpenAI) or set **Ollama URL** (default: localhost:11434)
+3. Choose your preferred model
+4. Manage custom prompt templates
+
+## Next Steps
+
+- [ ] Add `whisper-rs` for local speech-to-text transcription
+- [ ] Add global hotkey toggle (Cmd+Shift+C) to show/hide overlay
+- [ ] Add system tray icon for background operation
+- [ ] Add streaming responses for real-time token display
+- [ ] Add CRM integration (Salesforce, HubSpot)
