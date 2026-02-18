@@ -12,6 +12,8 @@ type ConfigState = Arc<Mutex<AppConfig>>;
 pub struct Session {
     pub id: String,
     pub title: String,
+    pub purpose: String,
+    pub context: Option<String>, // Added for resume/profile info
     pub status: SessionStatus,
     pub start_time: String,
     pub end_time: Option<String>,
@@ -52,6 +54,8 @@ type SessionState = Arc<Mutex<SessionManager>>;
 pub fn create_session(
     session_state: tauri::State<'_, SessionState>,
     title: String,
+    purpose: String,
+    context: Option<String>,
 ) -> Result<Session, String> {
     let mut mgr = session_state.lock();
 
@@ -62,6 +66,8 @@ pub fn create_session(
     let session = Session {
         id: uuid::Uuid::new_v4().to_string(),
         title,
+        purpose,
+        context,
         status: SessionStatus::Active,
         start_time: chrono::Utc::now().to_rfc3339(),
         end_time: None,

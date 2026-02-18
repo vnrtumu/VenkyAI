@@ -4,7 +4,6 @@ use tauri::{Emitter, AppHandle};
 use futures_util::StreamExt;
 
 use crate::config::AppConfig;
-use crate::ai::AIMessage;
 
 type ConfigState = std::sync::Arc<parking_lot::Mutex<AppConfig>>;
 
@@ -29,11 +28,19 @@ struct StreamChunk {
 pub async fn stream_chat(
     app: AppHandle,
     config: tauri::State<'_, ConfigState>,
-    messages: Vec<AIMessage>,
+    messages: Vec<crate::ai::AIMessage>,
     system_prompt: Option<String>,
 ) -> Result<String, String> {
     let cfg = config.lock().clone();
+    stream_llm_internal(app, cfg, messages, system_prompt).await
+}
 
+pub async fn stream_llm_internal(
+    app: AppHandle,
+    cfg: crate::config::AppConfig,
+    messages: Vec<crate::ai::AIMessage>,
+    system_prompt: Option<String>,
+) -> Result<String, String> {
     if cfg.openai_api_key.is_empty() {
         return Err("OpenAI API key not configured".to_string());
     }

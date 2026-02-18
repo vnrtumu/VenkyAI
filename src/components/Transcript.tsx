@@ -4,16 +4,18 @@ interface TranscriptEntry {
     timestamp: string;
 }
 
-interface SessionInfo {
+interface Session {
     id: string;
-    start_time: string;
     title: string;
-    is_active: boolean;
+    purpose: string;
+    status: 'Active' | 'Paused' | 'Ended';
+    start_time: string;
+    end_time?: string;
 }
 
 interface TranscriptProps {
     entries: TranscriptEntry[];
-    sessionInfo: SessionInfo | null;
+    sessionInfo: Session | null;
     isActive: boolean;
 }
 

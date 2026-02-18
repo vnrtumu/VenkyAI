@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import Settings from './components/Settings';
 import Transcript from './components/Transcript';
 import Overlay from './components/Overlay';
+import SessionSetup from './components/SessionSetup';
 import './index.css';
 
 interface TranscriptEntry {
@@ -12,11 +13,13 @@ interface TranscriptEntry {
     timestamp: string;
 }
 
-interface SessionInfo {
+interface Session {
     id: string;
-    start_time: string;
     title: string;
-    is_active: boolean;
+    purpose: string;
+    status: 'Active' | 'Paused' | 'Ended';
+    start_time: string;
+    end_time?: string;
 }
 
 type Tab = 'chat' | 'transcript' | 'settings';
@@ -24,7 +27,7 @@ type Tab = 'chat' | 'transcript' | 'settings';
 function App() {
     const [activeTab, setActiveTab] = useState<Tab>('chat');
     const [isSessionActive, setIsSessionActive] = useState(false);
-    const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
+    const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
     const [isRecording, setIsRecording] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
@@ -34,6 +37,7 @@ function App() {
     const [streamingText, setStreamingText] = useState('');
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [overlayVisible, setOverlayVisible] = useState(true);
+    const [showSetup, setShowSetup] = useState(false);
     const captureInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // ─── Event Listeners ────────────────────────────────────────────────
@@ -50,7 +54,9 @@ function App() {
 
         const unlistenEnd = listen<string>('llm-stream-end', (event) => {
             setIsStreaming(false);
-            setSuggestions((prev: string[]) => [...prev, event.payload]);
+            if (event.payload && !event.payload.includes('[SILENCE]')) {
+                setSuggestions((prev: string[]) => [...prev, event.payload]);
+            }
             setStreamingText('');
         });
 
@@ -60,17 +66,42 @@ function App() {
         });
 
         // Listen for meeting detection
-        const unlistenMeeting = listen<string>('meeting-detected', (event) => {
-            setSuggestions((prev: string[]) => [...prev, `🔍 Meeting detected: ${event.payload}. Click ▶ to start or wait for auto-start.`]);
+        const unlistenMeeting = listen<string>('meeting-detected', (_event) => {
+            // No longer displaying in chat as per user request
+            // setSuggestions((prev: string[]) => [...prev, `🔍 Meeting Detected: ${event.payload}. VenkyAI is ready to assist.`]);
         });
 
-        const unlistenAutoStart = listen<SessionInfo>('session-auto-started', (event) => {
+        const unlistenAutoStart = listen<Session>('session-auto-started', (event) => {
             setSessionInfo(event.payload);
             setIsSessionActive(true);
             setTranscript([]);
             setIsRecording(true);
             setIsCapturing(true);
-            setSuggestions((prev: string[]) => [...prev, `🚀 Automated session started: ${event.payload.title}`]);
+            // setSuggestions((prev: string[]) => [...prev, `🚀 Automated session started: ${event.payload.title}`]);
+        });
+
+        // Listen for background transcription chunks
+        const unlistenTranscription = listen<string>('transcription-chunk', async (event) => {
+            const text = event.payload;
+            setTranscript((prev: TranscriptEntry[]) => [...prev, {
+                role: 'transcription',
+                content: text,
+                timestamp: new Date().toLocaleTimeString()
+            }]);
+
+            // Persist to session in background
+            invoke('add_transcript_entry', {
+                speaker: 'transcription',
+                text: text
+            }).catch(e => console.error('Failed to save background transcript:', e));
+        });
+
+        // Listen for live AI suggestions
+        const unlistenLiveSuggestion = listen<string>('live-suggestion', (event) => {
+            const text = event.payload;
+            if (text && !text.includes('[SILENCE]')) {
+                setSuggestions((prev: string[]) => [...prev, text]);
+            }
         });
 
         return () => {
@@ -80,18 +111,24 @@ function App() {
             unlistenVisibility.then(fn => fn());
             unlistenMeeting.then(fn => fn());
             unlistenAutoStart.then(fn => fn());
+            unlistenTranscription.then(fn => fn());
+            unlistenLiveSuggestion.then(fn => fn());
         };
     }, []);
 
     // ─── Session Controls ───────────────────────────────────────────────
-    const startSession = async () => {
+    const startSession = async (title: string, purpose: string, context: string) => {
         try {
-            const info = await invoke<SessionInfo>('create_session', { title: 'Meeting' });
+            const info = await invoke<Session>('create_session', { title, purpose, context });
             setSessionInfo(info);
             setIsSessionActive(true);
             setTranscript([]);
+            setShowSetup(false);
         } catch (e: any) {
             console.error('Failed to start session:', e);
+            // Even if it fails, we should probably close the setup screen or show an error
+            setShowSetup(false);
+            alert(`Failed to start session: ${e}`);
         }
     };
 
@@ -99,6 +136,27 @@ function App() {
         try {
             await invoke('end_session');
             setIsSessionActive(false);
+
+            // Cleanup: Stop all captures
+            if (isRecording) {
+                await invoke('stop_audio_capture').catch(console.error);
+                setIsRecording(false);
+            }
+            if (isCapturing) {
+                // System audio capture is also stopped here if active
+                await invoke('stop_system_audio_capture').catch(console.error);
+                setIsCapturing(false);
+            }
+
+            // Clear capture interval if exists
+            if (captureInterval.current) {
+                clearInterval(captureInterval.current);
+                captureInterval.current = null;
+            }
+
+            setSuggestions([]);
+            setStreamingText('');
+
         } catch (e: any) {
             console.error('Failed to end session:', e);
         }
@@ -213,6 +271,14 @@ function App() {
                     <span className="app-title">VenkyAI</span>
                     <span className="hotkey-badge" title="Press Cmd/Ctrl+Shift+C to toggle">⌘⇧C</span>
                 </div>
+
+                {isSessionActive && (
+                    <div className="live-indicator-badge">
+                        <span className="live-dot"></span>
+                        LIVE ✨
+                    </div>
+                )}
+
                 <div className="header-controls">
                     {/* STT Button */}
                     <button
@@ -242,7 +308,7 @@ function App() {
                     {/* Session */}
                     <button
                         className={`control-btn ${isSessionActive ? 'session-active' : ''}`}
-                        onClick={isSessionActive ? endSession : startSession}
+                        onClick={isSessionActive ? endSession : () => setShowSetup(true)}
                         title={isSessionActive ? 'End session' : 'Start session'}
                     >
                         {isSessionActive ? '⏸' : '▶'}
@@ -272,7 +338,6 @@ function App() {
                         isLoading={isLoading}
                         isStreaming={isStreaming}
                         streamingText={streamingText}
-                        isLive={isSessionActive}
                     />
                 )}
                 {activeTab === 'transcript' && (
@@ -296,6 +361,14 @@ function App() {
                     {isTranscribing && ' • 📝 Transcribing...'}
                 </span>
             </div>
+
+            {/* Session Setup Overlay */}
+            {showSetup && (
+                <SessionSetup
+                    onStart={startSession}
+                    onCancel={() => setShowSetup(false)}
+                />
+            )}
         </div>
     );
 }

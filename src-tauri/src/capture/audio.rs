@@ -224,6 +224,43 @@ pub fn get_audio_status(state: tauri::State<'_, CaptureStateHandle>) -> AudioSta
     }
 }
 
+/// Get the current audio buffer as WAV bytes and CLEAR the buffer
+pub fn get_and_clear_audio_wav_bytes() -> Result<Vec<u8>, String> {
+    let mut buffer_lock = AUDIO_BUFFER.lock();
+    if buffer_lock.is_empty() {
+        return Err("No audio data".to_string());
+    }
+    
+    let buffer = std::mem::take(&mut *buffer_lock);
+    drop(buffer_lock); // Release lock early
+
+    let sr = *SAMPLE_RATE.lock();
+
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: sr,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let mut writer =
+        hound::WavWriter::new(&mut cursor, spec).map_err(|e| format!("WAV error: {}", e))?;
+
+    for &sample in &buffer {
+        let s = (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
+        writer
+            .write_sample(s)
+            .map_err(|e| format!("WAV write error: {}", e))?;
+    }
+
+    writer
+        .finalize()
+        .map_err(|e| format!("WAV finalize error: {}", e))?;
+
+    Ok(cursor.into_inner())
+}
+
 /// Get the current audio buffer as WAV bytes (for STT processing)
 #[allow(dead_code)]
 pub fn get_audio_wav_bytes() -> Result<Vec<u8>, String> {

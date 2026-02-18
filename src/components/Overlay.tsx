@@ -6,10 +6,9 @@ interface OverlayProps {
     isLoading: boolean;
     isStreaming: boolean;
     streamingText: string;
-    isLive?: boolean;
 }
 
-function Overlay({ suggestions, onSendMessage, isLoading, isStreaming, streamingText, isLive }: OverlayProps) {
+function Overlay({ suggestions, onSendMessage, isLoading, isStreaming, streamingText }: OverlayProps) {
     const [input, setInput] = useState('');
     const messagesRef = useRef<HTMLDivElement>(null);
 
@@ -35,12 +34,6 @@ function Overlay({ suggestions, onSendMessage, isLoading, isStreaming, streaming
 
     return (
         <div className="overlay-panel">
-            {isLive && (
-                <div className="live-indicator-badge">
-                    <span className="live-dot"></span>
-                    LIVE ✨
-                </div>
-            )}
             <div className="messages-container" ref={messagesRef}>
                 {suggestions.length === 0 && !isStreaming && (
                     <div className="empty-state">
@@ -64,7 +57,10 @@ function Overlay({ suggestions, onSendMessage, isLoading, isStreaming, streaming
                 {suggestions.map((msg, idx) => {
                     const isUser = msg.startsWith('You: ');
                     const isError = msg.startsWith('Error: ');
-                    const content = isUser ? msg.slice(5) : msg;
+
+                    let content = msg;
+                    if (isUser) content = msg.slice(5);
+                    if (isError) content = msg.slice(7);
 
                     return (
                         <div key={idx} className={`message ${isUser ? 'user' : isError ? 'error' : 'assistant'}`}>
@@ -88,8 +84,8 @@ function Overlay({ suggestions, onSendMessage, isLoading, isStreaming, streaming
                     </div>
                 )}
 
-                {/* Loading indicator */}
-                {isLoading && !isStreaming && (
+                {/* Loading indicator / Pre-streaming state */}
+                {(isLoading || (isStreaming && !streamingText)) && (
                     <div className="message assistant loading-msg">
                         <div className="message-avatar">⚡</div>
                         <div className="message-content">

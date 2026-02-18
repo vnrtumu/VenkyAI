@@ -42,6 +42,13 @@ pub fn run() {
             ));
             app.manage(session_state);
 
+            // Storage state
+            let db_path = app_data.join("venkyai.db");
+            let storage = session::storage::Storage::new(&db_path)
+                .expect("Failed to initialize storage");
+            let storage_state = Arc::new(Mutex::new(storage));
+            app.manage(storage_state);
+
             // CRM state
             let crm_state = Arc::new(Mutex::new(integrations::CRMConfig::default()));
             app.manage(crm_state);
@@ -117,6 +124,11 @@ pub fn run() {
             let handle_transcribe = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 ai::live_engine::transcription_loop(handle_transcribe).await;
+            });
+
+            let handle_suggestions = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                ai::live_engine::suggestion_loop(handle_suggestions).await;
             });
 
             Ok(())
